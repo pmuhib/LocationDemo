@@ -1,0 +1,36 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 27
+    defaultConfig {
+        applicationId "com.example.locationdetection"
+        minSdkVersion 21
+        targetSdkVersion 27
+        multiDexEnabled true
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.google.android.gms:play-services-maps:11.8.0'
+    implementation 'com.google.android.gms:play-services-location:11.8.0'
+    implementation 'com.google.android.gms:play-services:11.8.0'
+
+    implementation 'com.karumi:dexter:4.2.0'
+
+    implementation 'com.android.support:appcompat-v7:27.1.0'
+    implementation 'com.android.support:support-vector-drawable:27.1.0'
+    implementation 'com.android.support:mediarouter-v7:27.1.0'
+    implementation 'com.android.support:design:27.1.0'
+    implementation 'com.android.volley:volley:1.1.0'
+    implementation 'com.google.code.gson:gson:2.2.4'
+    implementation 'com.android.support:cardview-v7:27.1.0'
+}
