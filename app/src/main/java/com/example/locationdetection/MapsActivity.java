@@ -89,7 +89,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     List<Address> currentAddresses,destinationAddress;
     double radius=0.50;
     PlaceAutocompleteAdapter  placeAutocompleteAdapter;
-    String currentloaction,destlocation;
+    String currentloaction,destlocation,distance;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,25 +102,27 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
 
         //Check Gps Status
-        checkgpsstatus();
         //Check internet Available
         if (Utils.isNetworkavailable(this)) {
+            checkgpsstatus();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkPermissions()) {
-                    if(checkstatuspermission==true) {
-                        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                checkPermissions();
+                mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+                  /*  if(checkstatuspermission==true) {
+                      *//*  SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                                 .findFragmentById(R.id.map);
-                        mapFragment.getMapAsync(this);
+                        mapFragment.getMapAsync(this);*//*
                     }
-                } else {
+                 else {
                     Utils.Message(this, "Your App Needs Permisions");
-                }
+                }*/
             } else {
+                mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
                 SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                         .findFragmentById(R.id.map);
                 mapFragment.getMapAsync(this);
             }
-            mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         } else {
             Snackbar.make(findViewById(android.R.id.content), "Check Network Connection", Snackbar.LENGTH_LONG).show();
         }
@@ -141,19 +143,27 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    private boolean checkPermissions() {
+    private void checkPermissions() {
         Dexter.withActivity(this).withPermission(Manifest.permission.ACCESS_FINE_LOCATION).withListener(new PermissionListener() {
             @Override
             public void onPermissionGranted(PermissionGrantedResponse response) {
 
                 checkstatuspermission = true;
+                SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                        .findFragmentById(R.id.map);
+                mapFragment.getMapAsync(MapsActivity.this);
+                Utils.Message(MapsActivity.this,"Allowed");
+
             }
 
             @Override
             public void onPermissionDenied(PermissionDeniedResponse response) {
+                Utils.Message(MapsActivity.this,"Need Permissions to run this App");
                 if (response.isPermanentlyDenied()) {
                     checkstatuspermission = false;
+                    Utils.Message(MapsActivity.this,"Need Permissions to run this App");
                     gotoPermissionSettings();
+
                 }
             }
 
@@ -161,14 +171,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onPermissionRationaleShouldBeShown(PermissionRequest permission, PermissionToken token) {
                 token.continuePermissionRequest();
                 checkstatuspermission = false;
+
             }
         }).withErrorListener(new PermissionRequestErrorListener() {
             @Override
             public void onError(DexterError error) {
 
+
             }
         }).check();
-        return checkstatuspermission;
     }
 
 
@@ -187,7 +198,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             currentAddresses = codeaddress(location);
                             if (!currentAddresses.isEmpty() && currentAddresses.size() > 0) {
                                 currentMarker= new MarkerOptions();
-                                currentMarker.position(currentlatLng).title("My Location=" + currentAddresses.get(0).getFeatureName() + "," + currentAddresses.get(0).getSubLocality() + "," + currentAddresses.get(0).getSubAdminArea()).snippet(currentAddresses.get(0).getLocality() + "," + currentAddresses.get(0).getAdminArea() + "," + currentAddresses.get(0).getCountryName()).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+                                currentMarker.position(currentlatLng).title("My Location").snippet(currentAddresses.get(0).getAddressLine(0)).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+                             //   currentMarker.position(currentlatLng).title("My Location=" + currentAddresses.get(0).getFeatureName() + "," + currentAddresses.get(0).getSubLocality() + "," + currentAddresses.get(0).getSubAdminArea()).snippet(currentAddresses.get(0).getLocality() + "," + currentAddresses.get(0).getAdminArea() + "," + currentAddresses.get(0).getCountryName()).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
                                 mMap.addMarker(currentMarker);
                                 mMap.moveCamera(CameraUpdateFactory.newLatLng(currentlatLng));
                                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentlatLng, 17));
@@ -205,12 +217,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    private synchronized void buildgoogleclient() {
-        /*client = new GoogleApiClient.Builder(this).addConnectionCallbacks(this).addOnConnectionFailedListener(this).addApi(LocationServices.API).build();
-        if (client != null) {
-            client.connect();
-        }*/
-    }
 
     private  void setupAutocomplete() {
         client=new GoogleApiClient.Builder(this).addApi(Places.GEO_DATA_API).addApi(Places.PLACE_DETECTION_API).enableAutoManage(this,this).build();
@@ -389,7 +395,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         for(int i=0;i<directionData.getRoutes().size();i++)
                         {
                             String duration=directionData.getRoutes().get(i).getLegs().get(i).getDuration().getText();
-                            String distance=directionData.getRoutes().get(i).getLegs().get(i).getDistance().getText();
+                            distance=directionData.getRoutes().get(i).getLegs().get(i).getDistance().getText();
                             Toast.makeText(getApplicationContext(),"Distance= "+distance+"\n"+"Duration= "+duration,Toast.LENGTH_LONG).show();
 
                             String encodedString=directionData.getRoutes().get(i).getOverview_polyline().getPoints();
@@ -450,55 +456,68 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
     private void nearbyHospitals()
     {
-        final MarkerOptions markerOptions = new MarkerOptions();
+        int PROXIMITY_RADIUS;
+        if (currentlatLng!=null) {
+            final MarkerOptions markerOptions = new MarkerOptions();
+            PROXIMITY_RADIUS = 500;
 
-        int PROXIMITY_RADIUS = 500;
-        //Defines the distance (in meters)
+         /*   if(distance!=null )
+            {
+                PROXIMITY_RADIUS= Integer.parseInt(distance)*1000;
+            }
+            else {
+                PROXIMITY_RADIUS = 500;
 
-        String key="AIzaSyDCDw0K3aui_cCWMvFQVYQfkxw5l9DHJaw";
+            }*/
+            //Defines the distance (in meters)
 
-        StringBuilder googlePlaceUrl = new StringBuilder("https://maps.googleapis.com/maps/api/place/nearbysearch/json?");
-        googlePlaceUrl.append("location="+currentlatLng.latitude+","+currentlatLng.longitude);
-        googlePlaceUrl.append("&radius="+PROXIMITY_RADIUS);
-        googlePlaceUrl.append("&type="+"hospital");
-        googlePlaceUrl.append("&key="+key);
-        String url=googlePlaceUrl.toString();
-        RequestQueue requestQueue=Volley.newRequestQueue(getApplicationContext());
-        StringRequest stringRequest=new StringRequest(Request.Method.GET, url, new Response.Listener<String>() {
-            @Override
-            public void onResponse(String response) {
-                Gson gson=new Gson();
-                GetNearByPlaces nearByPlaces=null;
+            String key="AIzaSyDCDw0K3aui_cCWMvFQVYQfkxw5l9DHJaw";
 
-                try {
-                    nearByPlaces=new GetNearByPlaces();
-                    nearByPlaces=gson.fromJson(response,GetNearByPlaces.class);
-                    String status=nearByPlaces.getStatus();
-                    List<GetNearByPlaces.ResultsBean> list=new ArrayList<>();
-                    list=nearByPlaces.getResults();
-                    for (int i=0;i<list.size();i++)
-                    {
-                        double lat=list.get(i).getGeometry().getLocation().getLat();
-                        double longt=list.get(i).getGeometry().getLocation().getLng();
-                        String name=list.get(i).getName();
-                        LatLng latLng=new LatLng(lat,longt);
-                        markerOptions.title(name).position(latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
-                        mMap.addMarker(markerOptions);
-                        Log.d("hos",response);
+            StringBuilder googlePlaceUrl = new StringBuilder("https://maps.googleapis.com/maps/api/place/nearbysearch/json?");
+            googlePlaceUrl.append("location="+currentlatLng.latitude+","+currentlatLng.longitude);
+            googlePlaceUrl.append("&radius="+PROXIMITY_RADIUS);
+            googlePlaceUrl.append("&type="+"hospital");
+            googlePlaceUrl.append("&key="+key);
+            String url=googlePlaceUrl.toString();
+            RequestQueue requestQueue=Volley.newRequestQueue(getApplicationContext());
+            StringRequest stringRequest=new StringRequest(Request.Method.GET, url, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Gson gson=new Gson();
+                    GetNearByPlaces nearByPlaces=null;
+
+                    try {
+                        nearByPlaces=new GetNearByPlaces();
+                        nearByPlaces=gson.fromJson(response,GetNearByPlaces.class);
+                        String status=nearByPlaces.getStatus();
+                        List<GetNearByPlaces.ResultsBean> list=new ArrayList<>();
+                        list=nearByPlaces.getResults();
+                        for (int i=0;i<list.size();i++)
+                        {
+                            double lat=list.get(i).getGeometry().getLocation().getLat();
+                            double longt=list.get(i).getGeometry().getLocation().getLng();
+                            String name=list.get(i).getName();
+                            String vicnity=list.get(i).getVicinity();
+                            LatLng latLng=new LatLng(lat,longt);
+                            markerOptions.title(name).position(latLng).snippet(vicnity).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
+                            mMap.addMarker(markerOptions);
+                            Log.d("hos",response);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    Toast.makeText(getApplicationContext(),response,Toast.LENGTH_LONG).show();
                 }
-                Toast.makeText(getApplicationContext(),response,Toast.LENGTH_LONG).show();
-            }
-        }, new Response.ErrorListener() {
-            @Override
-            public void onErrorResponse(VolleyError error) {
-                Log.d("Error",""+error);
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    Log.d("Error",""+error);
 
-            }
-        });
-        requestQueue.add(stringRequest);
+                }
+            });
+            requestQueue.add(stringRequest);
+        } else {
+        }
 
     }
 }
